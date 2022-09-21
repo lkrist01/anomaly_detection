@@ -3,20 +3,21 @@ import pandas as pd
 import numpy as np
 from sklearn.decomposition import PCA
 from sklearn import preprocessing
-
+from sklearn import metrics
+from sklearn.metrics.cluster import contingency_matrix
 
 class AnomalyDetection():
 
     def __init__(self, std_dev=None, normalize=False, pca=False, extreme=False, thresh=None, inv_cov= None, distrib=None):
         '''
-
-        :param std_dev:
-        :param normalize:
-        :param pca:
-        :param extreme:
-        :param thresh:
-        :param inv_cov:
-        :param distrib:
+        Class Constructor Initializer
+        :param std_dev: coefficient for selecting threshold from std
+        :param normalize: Flag for doing Scaling on data
+        :param pca: Flag for doing pca on data
+        :param extreme: Flag for automatic coefficient of std
+        :param thresh: Parameter for storing cluster MD Threshold
+        :param inv_cov: Parameter for storing cluster inverse covariance
+        :param distrib: Parameter for storing cluster mean distribution for each feature
         '''
 
         self.std_dev = std_dev
@@ -33,9 +34,9 @@ class AnomalyDetection():
 
     def fit(self, X):
         '''
-
+        Function for getting Cluster MD threshold
         :param X: Pandas Dataframe
-        :return:
+        :return: Mahalanobis distances for each data row
         '''
 
         #Checking for any preprocessing
@@ -58,8 +59,8 @@ class AnomalyDetection():
         mahal = cal_md_distance(X, self.inv_cov, self.mean_dist)
 
         #Specify type of threshold
-        if self.threshold:
-            k = self.threshold
+        if self.std_dev:
+            k = self.std_dev
         else:
             k = 3 if self.extreme else 2
 
@@ -70,9 +71,9 @@ class AnomalyDetection():
 
     def predict(self, X):
         '''
-
+        This function is used to return the prediction of a given dataset
         :param X: Pandas Dataframe
-        :return:
+        :return: np.array class prediction (Anomaly=1 , Normal=0)
         '''
 
         if self.pca:
@@ -84,7 +85,7 @@ class AnomalyDetection():
         outliers = []
 
         for i in range(len(md_dist)):
-            if md_dist[i] >= self.threshold:  #check if outside threshhold
+            if md_dist[i] >= self.threshold:  #check if outside threshold
                 outliers.append(1)
             else:
                 outliers.append(0)
@@ -98,15 +99,23 @@ class AnomalyDetection():
 
         return None
 
-    def score(self, X, y):
+    def score(self, X, y, type="silhouette"):
         '''
-
-        :param X:
-        :param y:
-        :return:
+        Function for cluster analysis for evaluation
+        :param X: Pandas dataset used on testing
+        :param y: 1D Array of predicted class
+        :return: Cluster evaluation score
         '''
-
-        return None
+        if type == "davies":
+            return metrics.davies_bouldin_score(X, y)
+        elif type == "calinski":
+            return metrics.calinski_harabasz_score(X, y)
+        elif type == "silhouette":
+            return metrics.silhouette_score(X, y, metric='euclidean')
+        else:
+            print("Please choose between ['davies', 'calinski','silhouette']")
+            return
+        # return contingency_matrix(X, y)
 
 if __name__ == '__main__':
     data = {'score': [91, 93, 72, 87, 86, 73, 68, 87, 78, 99, 95, 76, 84, 96, 76, 80, 83, 84, 73, 74],
@@ -125,13 +134,15 @@ if __name__ == '__main__':
     df_test = pd.DataFrame(data_test, columns=['score', 'hours', 'prep', 'grade'])
 
 
-    model = AnomalyDetection(pca=True, normalize=True)
+    model = AnomalyDetection()
     md = model.fit(df)
 
     df["anomaly"]= model.predict(df)
     df["md"] = md
 
-    print(df.head(), "\n Threshold = ", model.threshold)
+    print(df.head(), "\nCalculated Threshold = ", model.threshold)
 
-    df_test["anomaly"] = model.predict(df_test)
+    y_hat = model.predict(df_test)
+    print("\nCluster analysis score: ",model.score(df_test ,y_hat))
+    df_test["anomaly"] = y_hat
     print(df_test)
