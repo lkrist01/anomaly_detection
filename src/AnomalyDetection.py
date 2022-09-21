@@ -1,28 +1,63 @@
-from utils.utils import normilize_dataset, train_test_split_dataset, pca_transform ,calculate_cov_matrix, cal_md_distance
+from utils.utils import train_test_split_dataset ,calculate_cov_matrix, cal_md_distance
 import pandas as pd
 import numpy as np
+from sklearn.decomposition import PCA
+from sklearn import preprocessing
+
 
 class AnomalyDetection():
 
     def __init__(self, std_dev=None, normalize=False, pca=False, extreme=False, thresh=None, inv_cov= None, distrib=None):
+        '''
+
+        :param std_dev:
+        :param normalize:
+        :param pca:
+        :param extreme:
+        :param thresh:
+        :param inv_cov:
+        :param distrib:
+        '''
+
         self.std_dev = std_dev
-        self.normalize = normalize
-        self.pca = pca
         self.extreme = extreme
 
-        # stats for the cluster
+        # Scaler and pca params
+        self.scaler = normalize
+        self.pca = pca
+
+        # Cluster Snapshot Params
         self.threshold = thresh
         self.inv_cov = inv_cov
         self.mean_dist = distrib
 
     def fit(self, X):
-        cov_m, inv_cov_m = calculate_cov_matrix(X)
+        '''
 
+        :param X: Pandas Dataframe
+        :return:
+        '''
+
+        #Checking for any preprocessing
+        if self.pca:
+            # only keep the first 2 principal components
+            self.pca = PCA(n_components=2, svd_solver='full')
+            X = self.pca.fit_transform(X)
+
+        if self.scaler:
+            self.scaler = preprocessing.MinMaxScaler()
+            X = self.scaler.fit_transform(X)
+
+
+        # Calculate Covariances and update params
+        cov_m, inv_cov_m = calculate_cov_matrix(X)
         self.mean_dist = X.mean(axis=0)
         self.inv_cov = inv_cov_m
 
+        # Calculate Mahalanobis distance
         mahal = cal_md_distance(X, self.inv_cov, self.mean_dist)
 
+        #Specify type of threshold
         if self.threshold:
             k = self.threshold
         else:
@@ -33,22 +68,44 @@ class AnomalyDetection():
 
         return mahal
 
-    def predict(self, test_data):
+    def predict(self, X):
+        '''
 
-        md_dist = cal_md_distance(test_data, self.inv_cov, self.mean_dist)
+        :param X: Pandas Dataframe
+        :return:
+        '''
+
+        if self.pca:
+            X = self.pca.transform(X)
+        if self.scaler:
+            X = self.scaler.transform(X)
+
+        md_dist = cal_md_distance(X, self.inv_cov, self.mean_dist)
         outliers = []
 
         for i in range(len(md_dist)):
-            if md_dist[i] >= self.threshold:
+            if md_dist[i] >= self.threshold:  #check if outside threshhold
                 outliers.append(1)
             else:
                 outliers.append(0)
         return np.array(outliers)
 
     def prep_process_data(self):
+        '''
+
+        :return:
+        '''
+
         return None
 
     def score(self, X, y):
+        '''
+
+        :param X:
+        :param y:
+        :return:
+        '''
+
         return None
 
 if __name__ == '__main__':
@@ -58,21 +115,23 @@ if __name__ == '__main__':
             'grade': [70, 88, 80, 83, 88, 84, 78, 94, 90, 93, 89, 82, 95, 94, 81, 93, 93, 90, 89, 89]
             }
 
-    data_test = {'score': [91, 100],
-            'hours': [2, 1, ],
-            'prep': [0, 0, ],
-            'grade': [88, 88]
+    data_test = {'score': [91, 100, 84, 91],
+            'hours': [2, 1, 4, 16],
+            'prep': [0, 0, 3, 4],
+            'grade': [88, 88, 90, 60]
             }
+
     df = pd.DataFrame(data, columns=['score', 'hours', 'prep', 'grade'])
     df_test = pd.DataFrame(data_test, columns=['score', 'hours', 'prep', 'grade'])
 
-    model = AnomalyDetection()
+
+    model = AnomalyDetection(pca=True, normalize=True)
     md = model.fit(df)
 
-    df["anomaly"]= model.predict_outliers(df)
+    df["anomaly"]= model.predict(df)
     df["md"] = md
 
     print(df.head(), "\n Threshold = ", model.threshold)
 
-    df_test["anomaly"] = model.predict_outliers(df_test)
+    df_test["anomaly"] = model.predict(df_test)
     print(df_test)
