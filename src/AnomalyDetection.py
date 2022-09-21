@@ -33,7 +33,7 @@ class AnomalyDetection():
 
         return mahal
 
-    def predict_outliers(self, test_data):
+    def predict(self, test_data):
 
         md_dist = cal_md_distance(test_data, self.inv_cov, self.mean_dist)
         outliers = []
@@ -44,6 +44,9 @@ class AnomalyDetection():
             else:
                 outliers.append(0)
         return np.array(outliers)
+
+    def prep_process_data(self):
+        return None
 
     def score(self, X, y):
         return None
