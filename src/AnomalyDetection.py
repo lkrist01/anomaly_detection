@@ -4,6 +4,8 @@ import numpy as np
 from sklearn.decomposition import PCA
 from sklearn import preprocessing
 from sklearn import metrics
+import tensorflow as tf
+import matplotlib.pyplot as plt
 
 class MahalanobisDistance():
 
@@ -113,18 +115,67 @@ class MahalanobisDistance():
         # return contingency_matrix(X, y)
 
 
-class AutoEncoder():
-    def __init__(self, input_dim, num_layers):
-        self.encoder = None
+# config file
+config = {
+    'learning_rate': 0.001,
+    'dense_layers':[
+          {'enc_neurons': 64, 'activation': 'relu'},
+          {'code_size':4, 'activation': 'relu'},
+          {'dec_neurons': 16, 'activation': 'relu'},
+        ],
+    "outputs": 1,
+    'output_activation':'sigmoid',
+    'dropout_rate': 0.08,
+    'batch_size': 128,
+}
 
-        self.decoder = None
+class AutoEncoder(tf.keras.Model):
+    def __init__(self, config):
+        super(AutoEncoder, self).__init__()
 
-    def fit(self, X):
+        self.encoder = tf.keras.Sequential([
+            tf.keras.layers.Dense(config["dense_layers"][0]["enc_neurons"], activation=config["dense_layers"][0]["activation"]),
+            tf.keras.layers.Dense(config["dense_layers"][0]["enc_neurons"]/2, activation=config["dense_layers"][0]["activation"]),
+            tf.keras.layers.Dense(config["dense_layers"][0]["enc_neurons"]/4, activation=config["dense_layers"][0]["activation"]),
+            tf.keras.layers.Dense(config["dense_layers"][1]["code_size"], activation=config["dense_layers"][1]["activation"])
+        ])
 
-        return self
+        self.decoder = tf.keras.Sequential([
+            tf.keras.layers.Dense(config["dense_layers"][2]["dec_neurons"], activation=config["dense_layers"][2]["activation"]),
+            tf.keras.layers.Dense(config["dense_layers"][2]["dec_neurons"]*2, activation=config["dense_layers"][2]["activation"]),
+            tf.keras.layers.Dense(config["dense_layers"][2]["dec_neurons"]*2, activation=config["dense_layers"][2]["activation"]),
+            tf.keras.layers.Dense(1, activation=config["output_activation"])
+        ])
 
-    def predict(self, X):
-        return None
+    def call(self, inputs):
+        encoded = self.encoder(inputs)
+        decoded = self.decoder(encoded)
+        return decoded
+
+        # A convenient way to get model summary and plot in subclassed api
+
+    def build_graph(self, input_shape):
+        x = tf.keras.layers.Input(shape=input_shape)
+        return tf.keras.Model(inputs=[x], outputs=self.call(x))
+
+    def find_threshold(self, x_train_scaled):
+        reconstructions = self.predict(x_train_scaled)
+        # provides losses of individual instances
+        reconstruction_errors = tf.keras.losses.msle(reconstructions, x_train_scaled)
+
+        # threshold for anomaly scores
+        threshold = np.mean(reconstruction_errors.numpy())  + (3 * np.std(reconstruction_errors.numpy()))
+        return threshold
+
+    def get_predictions(self, x_test_scaled, threshold):
+        predictions = self.predict(x_test_scaled)
+        # provides losses of individual instances
+        errors = tf.keras.losses.msle(predictions, x_test_scaled)
+        # 0 = anomaly, 1 = normal
+        preds = pd.Series(errors).apply(lambda x: 1 if x > threshold else 0)
+
+        return preds
+
 
 if __name__ == '__main__':
     data_train = {'score': [91, 93, 72, 87, 86, 73, 68, 87, 78, 99, 95, 76, 84, 96, 76, 80, 83, 84, 73, 74],
@@ -142,16 +193,52 @@ if __name__ == '__main__':
     df_train = pd.DataFrame(data_train, columns=['score', 'hours', 'prep', 'grade'])
     df_test = pd.DataFrame(data_test, columns=['score', 'hours', 'prep', 'grade'])
 
-
     model = MahalanobisDistance(pca=True, normalize=True)
     md = model.fit(df_train)
 
-    df_train["anomaly"]= model.predict(df_train)
-    df_train["md"] = md
-
-    print(df_train.head(), "\nCalculated Threshold = ", model.threshold)
+    y_hat = model.predict(df_train)
+    print(y_hat)
+    # df_train["md"] = md
+    # print(df_train.head(), "\nCalculated Threshold = ", model.threshold)
 
     y_hat = model.predict(df_test)
     print("\nCluster analysis score: ",model.score(df_test ,y_hat))
-    df_test["anomaly"] = y_hat
-    print(df_test)
+    print(y_hat)
+
+    # Autoencoder model
+    # min max scale the input data
+    min_max_scaler = preprocessing.MinMaxScaler(feature_range=(0, 1))
+    x_train_scaled = min_max_scaler.fit_transform(df_train.copy())
+    x_test_scaled = min_max_scaler.transform(df_test.copy())
+
+    nn_model = AutoEncoder(config)
+    nn_model.compile(loss='mse', optimizer=tf.keras.optimizers.Adam(), metrics=['mse'])
+
+    history = nn_model.fit(
+                            x_train_scaled,
+                            x_train_scaled,
+                            epochs=100,
+                            batch_size=512,
+                            validation_data=(x_test_scaled, x_test_scaled)
+                          )
+
+    # Geting model structure
+    nn_model.build_graph(x_train_scaled.shape).summary()
+    print(nn_model.summary())
+
+    # Model Evaluation
+    plt.plot(history.history['loss'])
+    plt.plot(history.history['val_loss'])
+    plt.xlabel('Epochs')
+    plt.ylabel('MSLE Loss')
+    plt.legend(['loss', 'val_loss'])
+    plt.show()
+
+
+    print("Calculating threshold")
+    threshold = nn_model.find_threshold(x_train_scaled)
+    print(f"Threshold method one: {threshold}")
+
+    print("Getting Prediction on test data")
+    y_hat = nn_model.get_predictions(x_test_scaled, threshold)
+    print(y_hat)
