@@ -5,7 +5,7 @@ from sklearn.decomposition import PCA
 from sklearn import preprocessing
 from sklearn import metrics
 
-class AnomalyDetection():
+class MahalanobisDistance():
 
     def __init__(self, std_dev=None, normalize=False, pca=False, extreme=False, thresh=None, inv_cov= None, distrib=None):
         '''
@@ -112,6 +112,20 @@ class AnomalyDetection():
             return
         # return contingency_matrix(X, y)
 
+
+class AutoEncoder():
+    def __init__(self, input_dim, num_layers):
+        self.encoder = None
+
+        self.decoder = None
+
+    def fit(self, X):
+
+        return self
+
+    def predict(self, X):
+        return None
+
 if __name__ == '__main__':
     data_train = {'score': [91, 93, 72, 87, 86, 73, 68, 87, 78, 99, 95, 76, 84, 96, 76, 80, 83, 84, 73, 74],
             'hours': [16, 6, 3, 1, 2, 3, 2, 5, 2, 5, 2, 3, 4, 3, 3, 3, 4, 3, 4, 4],
@@ -129,7 +143,7 @@ if __name__ == '__main__':
     df_test = pd.DataFrame(data_test, columns=['score', 'hours', 'prep', 'grade'])
 
 
-    model = AnomalyDetection(pca=True, normalize=True)
+    model = MahalanobisDistance(pca=True, normalize=True)
     md = model.fit(df_train)
 
     df_train["anomaly"]= model.predict(df_train)
