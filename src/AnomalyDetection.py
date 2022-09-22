@@ -4,14 +4,13 @@ import numpy as np
 from sklearn.decomposition import PCA
 from sklearn import preprocessing
 from sklearn import metrics
-from sklearn.metrics.cluster import contingency_matrix
 
 class AnomalyDetection():
 
     def __init__(self, std_dev=None, normalize=False, pca=False, extreme=False, thresh=None, inv_cov= None, distrib=None):
         '''
         Class Constructor Initializer
-        :param std_dev: coefficient for selecting threshold from std
+        :param std_dev: coefficient multiplying for threshold from std to detect anomaly (Example 3sd)
         :param normalize: Flag for doing Scaling on data
         :param pca: Flag for doing pca on data
         :param extreme: Flag for automatic coefficient of std
@@ -24,8 +23,15 @@ class AnomalyDetection():
         self.extreme = extreme
 
         # Scaler and pca params
-        self.scaler = normalize
-        self.pca = pca
+        if pca:
+            self.pca = PCA(n_components=2, svd_solver='full')
+        else:
+            self.pca = None
+
+        if normalize:
+            self.scaler = preprocessing.MinMaxScaler()
+        else:
+            self.scaler = None
 
         # Cluster Snapshot Params
         self.threshold = thresh
@@ -42,13 +48,10 @@ class AnomalyDetection():
         #Checking for any preprocessing
         if self.pca:
             # only keep the first 2 principal components
-            self.pca = PCA(n_components=2, svd_solver='full')
             X = self.pca.fit_transform(X)
 
         if self.scaler:
-            self.scaler = preprocessing.MinMaxScaler()
             X = self.scaler.fit_transform(X)
-
 
         # Calculate Covariances and update params
         cov_m, inv_cov_m = calculate_cov_matrix(X)
@@ -91,14 +94,6 @@ class AnomalyDetection():
                 outliers.append(0)
         return np.array(outliers)
 
-    def prep_process_data(self):
-        '''
-
-        :return:
-        '''
-
-        return None
-
     def score(self, X, y, type="silhouette"):
         '''
         Function for cluster analysis for evaluation
@@ -118,7 +113,7 @@ class AnomalyDetection():
         # return contingency_matrix(X, y)
 
 if __name__ == '__main__':
-    data = {'score': [91, 93, 72, 87, 86, 73, 68, 87, 78, 99, 95, 76, 84, 96, 76, 80, 83, 84, 73, 74],
+    data_train = {'score': [91, 93, 72, 87, 86, 73, 68, 87, 78, 99, 95, 76, 84, 96, 76, 80, 83, 84, 73, 74],
             'hours': [16, 6, 3, 1, 2, 3, 2, 5, 2, 5, 2, 3, 4, 3, 3, 3, 4, 3, 4, 4],
             'prep': [3, 4, 0, 3, 4, 0, 1, 2, 1, 2, 3, 3, 3, 2, 2, 2, 3, 3, 2, 2],
             'grade': [70, 88, 80, 83, 88, 84, 78, 94, 90, 93, 89, 82, 95, 94, 81, 93, 93, 90, 89, 89]
@@ -130,17 +125,17 @@ if __name__ == '__main__':
             'grade': [88, 88, 90, 60]
             }
 
-    df = pd.DataFrame(data, columns=['score', 'hours', 'prep', 'grade'])
+    df_train = pd.DataFrame(data_train, columns=['score', 'hours', 'prep', 'grade'])
     df_test = pd.DataFrame(data_test, columns=['score', 'hours', 'prep', 'grade'])
 
 
-    model = AnomalyDetection()
-    md = model.fit(df)
+    model = AnomalyDetection(pca=True, normalize=True)
+    md = model.fit(df_train)
 
-    df["anomaly"]= model.predict(df)
-    df["md"] = md
+    df_train["anomaly"]= model.predict(df_train)
+    df_train["md"] = md
 
-    print(df.head(), "\nCalculated Threshold = ", model.threshold)
+    print(df_train.head(), "\nCalculated Threshold = ", model.threshold)
 
     y_hat = model.predict(df_test)
     print("\nCluster analysis score: ",model.score(df_test ,y_hat))
