@@ -57,7 +57,7 @@ class MahalanobisDistance:
         if self.scaler:
             X = self.scaler.fit_transform(X)
 
-        # Calculate Covariances and update params
+        # Calculate covariances and update params
         cov_m, inv_cov_m = calculate_cov_matrix(X)
         self.mean_dist = X.mean(axis=0)
         self.inv_cov = inv_cov_m
@@ -98,7 +98,8 @@ class MahalanobisDistance:
                 outliers.append(0)
         return np.array(outliers)
 
-    def score(self, X, y, f_type="silhouette"):
+    @staticmethod
+    def score(X, y, f_type="silhouette"):
         """
         Function for cluster analysis for evaluation
         :param f_type: Type of cluster analysis
@@ -153,7 +154,7 @@ class AutoEncoder(tf.keras.Model):
                                   activation=configs["dense_layers"][2]["activation"]),
             tf.keras.layers.Dense(configs["dense_layers"][2]["dec_neurons"] * 2,
                                   activation=configs["dense_layers"][2]["activation"]),
-            tf.keras.layers.Dense(configs["dense_layers"][2]["dec_neurons"] * 2,
+            tf.keras.layers.Dense(configs["dense_layers"][2]["dec_neurons"] * 4,
                                   activation=configs["dense_layers"][2]["activation"]),
             tf.keras.layers.Dense(1, activation=configs["output_activation"])
         ])
@@ -161,6 +162,7 @@ class AutoEncoder(tf.keras.Model):
     def call(self, inputs, **kwargs):
         """
         Function needed to implement model's forward pass
+        :param **kwargs:
         :param inputs:
         :param kwargs:
         :return:
